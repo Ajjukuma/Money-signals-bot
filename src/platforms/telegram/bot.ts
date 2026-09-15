@@ -1,6 +1,6 @@
 /**
  * Telegram-first MVP bot commands.
- * In DEMO_MODE, commands are handled in-process without Telegram API calls.
+ * In DEMO_MODE, payments are stubbed; with TELEGRAM_BOT_TOKEN, messages go out live.
  */
 
 import type { Store } from "../../db/client.js";
@@ -11,6 +11,7 @@ import { validateReferralCode, normalizeReferralCode } from "../../core/referral
 import type { PaymentProvider } from "../../payments/provider.js";
 import { applyWebhookGrant } from "../../payments/index.js";
 import type { PlatformSender } from "../../core/fanout.js";
+import { sendMessage } from "./api.js";
 
 export interface TelegramUpdate {
   message?: {
@@ -36,9 +37,9 @@ export class TelegramBot implements PlatformSender {
 
   async send(platformUserId: string, text: string): Promise<void> {
     this.logs.push(`telegram:${platformUserId} => ${text}`);
-    if (!this.demoMode && process.env.TELEGRAM_BOT_TOKEN) {
-      // Production path would call Telegram sendMessage API.
-      // Intentionally stubbed so demo runs offline.
+    const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+    if (token) {
+      await sendMessage(token, platformUserId, text);
     }
   }
 
@@ -73,6 +74,7 @@ export class TelegramBot implements PlatformSender {
   }
 
   private cmdStart(userId: string, referralCode: string): string {
+    void userId;
     return [
       "Welcome to Money Signals Bot 📈",
       "",
