@@ -12,6 +12,24 @@ Monetized multi-platform **trading signals** bot. Telegram-first MVP, Discord sl
 | SL / TP | Hidden | Included |
 | Live updates | No | Yes |
 
+## Free public channel vs premium bot
+
+| Surface | Who | What they get |
+|---------|-----|----------------|
+| **@MoneySignalsFreeAjju** (public channel) | Anyone | Delayed free alerts: majors only, **no SL/TP**, delay banner, CTA to premium bot |
+| **@MoneySignalsAjju_bot** (bot DMs) | Free bot users | Same delayed / majors-only / hidden SL-TP rules + daily quota |
+| **@MoneySignalsAjju_bot** (bot DMs) | Paid / demo_paid | Real-time signals with SL/TP, all pairs, unlimited |
+
+When a signal is **published** (admin `publish` / HTTP, or `npm run signal:scan`), the bot still fans out to registered users **and** also posts the free/delayed version to the public channel (if configured). Channel failures are logged and never abort the publish. Channel posts inherit the same scanner **dedup** as signals (no republish while an open same pair+side exists within `SIGNAL_DEDUP_HOURS`).
+
+Env (see `.env.example`):
+
+- `TELEGRAM_FREE_CHANNEL` — channel @username (e.g. `@MoneySignalsFreeAjju`)
+- `TELEGRAM_FREE_CHANNEL_ID` — numeric chat id (preferred when set, e.g. `-100…`)
+- `TELEGRAM_BOT_TOKEN` — required to actually `sendMessage` to the channel (bot must be an admin of the channel)
+
+Premium CTA line on every free-channel post: `Real-time premium → @MoneySignalsAjju_bot`
+
 ## $0 demo mode
 
 Set `DEMO_MODE=true` (default when bot/payment tokens are missing). You can run the full flow offline:
@@ -55,6 +73,7 @@ See `.env.example`. Important:
 - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID_MONTHLY` — Discord/X billing
 - `ADMIN_TOKEN` — required for publisher CLI/HTTP
 - `FREE_SIGNALS_PER_DAY`, `FREE_DELAY_MINUTES`, `REFERRAL_BONUS_DAYS`
+- `TELEGRAM_FREE_CHANNEL` / `TELEGRAM_FREE_CHANNEL_ID` — public free delayed-alerts channel
 
 **Never commit a real `.env`.**
 

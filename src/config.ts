@@ -9,6 +9,8 @@ export interface AppConfig {
   freeDelayMinutes: number;
   referralBonusDays: number;
   telegramBotToken: string | undefined;
+  telegramFreeChannel: string | undefined;
+  telegramFreeChannelId: string | undefined;
 }
 
 function parseDemoMode(env: NodeJS.ProcessEnv): boolean {
@@ -30,5 +32,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     freeDelayMinutes: Number(env.FREE_DELAY_MINUTES ?? 20),
     referralBonusDays: Number(env.REFERRAL_BONUS_DAYS ?? 7),
     telegramBotToken: env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
+    telegramFreeChannel: env.TELEGRAM_FREE_CHANNEL?.trim() || undefined,
+    telegramFreeChannelId: env.TELEGRAM_FREE_CHANNEL_ID?.trim() || undefined,
   };
 }

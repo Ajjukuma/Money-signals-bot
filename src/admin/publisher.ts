@@ -3,6 +3,7 @@ import type { Store } from "../db/client.js";
 import { isMajorPair, type Signal, type SignalSide } from "../core/signal.js";
 import { fanOutSignal, type DeliveryTarget } from "../core/fanout.js";
 import type { PlatformSender } from "../core/fanout.js";
+import { postFreeChannelSignal } from "../platforms/telegram/freeChannel.js";
 
 export interface PublishInput {
   pair: string;
@@ -18,7 +19,7 @@ export async function publishSignal(
   store: Store,
   input: PublishInput,
   senders: Partial<Record<"telegram" | "discord" | "x", PlatformSender>>,
-): Promise<{ signal: Signal; deliveries: number }> {
+): Promise<{ signal: Signal; deliveries: number; channelPosted: boolean }> {
   const signal: Signal = {
     id: randomUUID(),
     pair: input.pair.toUpperCase(),
@@ -48,5 +49,31 @@ export async function publishSignal(
   for (const r of results) {
     if (r.delivered && r.newQuota) store.setQuota(r.newQuota);
   }
-  return { signal, deliveries: results.filter((r) => r.delivered).length };
+
+  // Public free channel (delayed / no SL-TP). Soft-fail — never abort publish.
+  let channelPosted = false;
+  try {
+    const channel = await postFreeChannelSignal(signal);
+    if (channel.ok) {
+      channelPosted = true;
+      console.log(`Free channel posted to ${channel.chatId} for signal ${signal.id}`);
+    } else if (channel.skipped) {
+      console.log(
+        `Free channel skip (${channel.reason}) for signal ${signal.id}`,
+      );
+    } else {
+      console.error(
+        `Free channel post failed for signal ${signal.id}: ${channel.reason}`,
+      );
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Free channel post error for signal ${signal.id}: ${msg}`);
+  }
+
+  return {
+    signal,
+    deliveries: results.filter((r) => r.delivered).length,
+    channelPosted,
+  };
 }
