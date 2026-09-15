@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.env
+.env.local
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+coverage/
+.DS_Store
+*.log
+.vscode/
+.idea/
+tmp/
+
+# runtime
+data/
+.env.*
+!.env.example
