@@ -14,9 +14,15 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "admin": "tsx src/admin/cli.ts",
-    "demo": "DEMO_MODE=true tsx src/index.ts"
+    "demo": "DEMO_MODE=true tsx src/index.ts",
+    "signal:scan": "tsx src/market/scan.ts"
   },
-  "keywords": ["trading", "signals", "telegram", "discord"],
+  "keywords": [
+    "trading",
+    "signals",
+    "telegram",
+    "discord"
+  ],
   "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^11.7.0",

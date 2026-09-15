@@ -72,6 +72,34 @@ curl -X POST http://127.0.0.1:8787/publish \
   -d '{"pair":"ETHUSDT","side":"short","entry":3500,"stopLoss":3600,"takeProfit":[3400,3300]}'
 ```
 
+
+## Live signal scanner (real market data)
+
+`npm run signal:scan` fetches **real** 1h OHLCV (Kraken public OHLC first; Coinbase Exchange candles as fallback — Binance often returns 451 from this host) for majors **BTCUSDT** and **ETHUSDT**, then evaluates a transparent strategy on **closed** candles only.
+
+### Strategy: EMA9 / EMA21 cross + ATR(14) stops
+
+| Rule | Detail |
+|------|--------|
+| Timeframe | 1h closed candles |
+| Long | EMA(9) crosses **above** EMA(21) on the most recently closed bar |
+| Short | EMA(9) crosses **below** EMA(21) on that same bar |
+| Entry | Last closed candle close |
+| Stop loss | Long: `entry − 1.5×ATR(14)`; Short: mirror |
+| Take profit | TP1 = `entry ± 1.5×ATR`; TP2 = `entry ± 2.5×ATR` |
+| Emit rule | Only when a cross happened on the **most recently closed** candle (not every run) |
+| Confidence | `clamp(50…75)` from `|EMA9−EMA21| / ATR` separation |
+| Note | Includes strategy name, exchange source, and “automated technical — not financial advice” |
+| Dedup | Skips republish of same pair+side while an **open** signal exists within `SIGNAL_DEDUP_HOURS` (default 6) |
+
+```bash
+npm run signal:scan
+# → publishes via publishSignal / Telegram fan-out when setups exist
+# → prints SKIP and exits 0 when none
+```
+
+Secrets stay in `.env` (never commit). Optional: `SIGNAL_DEDUP_HOURS=6`.
+
 ## Project layout
 
 ```
@@ -79,6 +107,7 @@ src/core/          identity, entitlements, quotas, signal, fan-out, referrals
 src/platforms/     telegram / discord / x
 src/payments/      PaymentProvider + Stars + Stripe stubs
 src/admin/         publisher CLI + HTTP
+src/market/        OHLCV fetch + EMA/ATR strategy scanner
 src/db/            SQLite (better-sqlite3)
 tests/             entitlement & quota + payment idempotency
 ```
@@ -91,6 +120,7 @@ tests/             entitlement & quota + payment idempotency
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run demo` | Offline walkthrough |
 | `npm run admin` | Publish signals |
+| `npm run signal:scan` | Live EMA/ATR scan → publish or SKIP |
 
 ## License
 

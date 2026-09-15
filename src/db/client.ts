@@ -177,6 +177,21 @@ export class Store {
       );
   }
 
+
+  /** True if an open signal for pair+side exists within the last `withinHours`. */
+  hasRecentOpenSignal(pair: string, side: string, withinHours: number): boolean {
+    const since = new Date(Date.now() - withinHours * 3600_000).toISOString();
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM signals
+         WHERE pair = ? AND side = ? AND status = 'open'
+           AND COALESCE(published_at, created_at) >= ?
+         LIMIT 1`,
+      )
+      .get(pair.toUpperCase(), side, since);
+    return Boolean(row);
+  }
+
   listRecentSignals(limit = 10): Signal[] {
     const rows = this.db
       .prepare(`SELECT * FROM signals ORDER BY created_at DESC LIMIT ?`)
