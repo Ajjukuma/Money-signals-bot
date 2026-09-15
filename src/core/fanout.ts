@@ -51,36 +51,45 @@ export async function fanOutSignal(
     const text = formatSignal(signal, { includeSlTp: features.includeSlTp });
     const sender = senders[target.platform];
 
-    if (features.delayMinutes > 0) {
-      const delayedUntil = new Date(now.getTime() + features.delayMinutes * 60_000).toISOString();
+    try {
+      if (features.delayMinutes > 0) {
+        const delayedUntil = new Date(now.getTime() + features.delayMinutes * 60_000).toISOString();
+        // Demo / MVP: we record delay; real workers would enqueue.
+        if (sender) {
+          // Still send immediately in demo with a delay banner for observability.
+          await sender.send(
+            target.platformUserId,
+            `[Delayed ~${features.delayMinutes}m for free tier]\n${text}`,
+          );
+        }
+        results.push({
+          userId: target.userId,
+          delivered: true,
+          delayedUntil,
+          message: text,
+          newQuota: nextQuota(target.quota, target.userId, now),
+          reason: "scheduled_delay",
+        });
+        continue;
+      }
+
+      if (sender) {
+        await sender.send(target.platformUserId, text);
+      }
       results.push({
         userId: target.userId,
         delivered: true,
-        delayedUntil,
         message: text,
         newQuota: nextQuota(target.quota, target.userId, now),
-        reason: "scheduled_delay",
       });
-      // Demo / MVP: we record delay; real workers would enqueue.
-      if (sender) {
-        // Still send immediately in demo with a delay banner for observability.
-        await sender.send(
-          target.platformUserId,
-          `[Delayed ~${features.delayMinutes}m for free tier]\n${text}`,
-        );
-      }
-      continue;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      results.push({
+        userId: target.userId,
+        delivered: false,
+        reason: `send_failed: ${reason}`,
+      });
     }
-
-    if (sender) {
-      await sender.send(target.platformUserId, text);
-    }
-    results.push({
-      userId: target.userId,
-      delivered: true,
-      message: text,
-      newQuota: nextQuota(target.quota, target.userId, now),
-    });
   }
 
   return results;

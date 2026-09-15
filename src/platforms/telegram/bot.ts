@@ -38,8 +38,25 @@ export class TelegramBot implements PlatformSender {
   async send(platformUserId: string, text: string): Promise<void> {
     this.logs.push(`telegram:${platformUserId} => ${text}`);
     const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-    if (token) {
+    if (!token) return;
+    try {
       await sendMessage(token, platformUserId, text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Skip unreachable chats so one bad demo/stale id never aborts fan-out.
+      if (
+        /chat not found/i.test(msg) ||
+        /bot was blocked by the user/i.test(msg) ||
+        /user is deactivated/i.test(msg) ||
+        /forbidden/i.test(msg) ||
+        /bot can.t initiate conversation/i.test(msg)
+      ) {
+        console.warn(
+          `Telegram send skipped for ${platformUserId}: ${msg}`,
+        );
+        return;
+      }
+      throw err;
     }
   }
 
