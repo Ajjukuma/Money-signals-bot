@@ -79,6 +79,8 @@ curl -X POST http://127.0.0.1:8787/publish \
 
 ### Strategy: EMA9 / EMA21 cross + ATR(14) stops
 
+Permissionless auto-publish: the scanner only publishes **high-quality** crosses. Failed gates log under `SKIP` (pair skipped, no publish).
+
 | Rule | Detail |
 |------|--------|
 | Timeframe | 1h closed candles |
@@ -88,9 +90,13 @@ curl -X POST http://127.0.0.1:8787/publish \
 | Stop loss | Long: `entry − 1.5×ATR(14)`; Short: mirror |
 | Take profit | TP1 = `entry ± 1.5×ATR`; TP2 = `entry ± 2.5×ATR` |
 | Emit rule | Only when a cross happened on the **most recently closed** candle (not every run) |
+| Quality: ATR | ATR(14) must be **> 0.15% of price** (skip dead / flat markets) |
+| Quality: separation | `|EMA9−EMA21| / ATR ≥ 0.15` (reject hairline crosses) |
+| Quality: confidence | Confidence after `clamp(50…75)` must be **≥ 58** |
 | Confidence | `clamp(50…75)` from `|EMA9−EMA21| / ATR` separation |
-| Note | Includes strategy name, exchange source, and “automated technical — not financial advice” |
+| Note | Includes strategy name, exchange source, quality gates summary, and “automated technical — not financial advice” |
 | Dedup | Skips republish of same pair+side while an **open** signal exists within `SIGNAL_DEDUP_HOURS` (default 6) |
+| SKIP logging | Each rejected pair logs a concrete reason (`no cross…`, `ATR too low…`, `EMA separation too tight…`, `confidence N < 58`, `dedup…`) |
 
 ```bash
 npm run signal:scan

@@ -1,7 +1,8 @@
 /**
  * Live signal scanner CLI.
  * Usage: npm run signal:scan
- * Fetches real 1h OHLCV, evaluates EMA/ATR strategy, publishes via publishSignal when setups exist.
+ * Fetches real 1h OHLCV, evaluates EMA/ATR strategy with quality gates,
+ * publishes via publishSignal when high-quality setups exist.
  */
 
 import { loadConfig } from "../config.js";
@@ -12,7 +13,7 @@ import { TelegramBot } from "../platforms/telegram/bot.js";
 import { DiscordBot } from "../platforms/discord/bot.js";
 import { StubXAdapter } from "../platforms/x/adapter.js";
 import { fetchOhlcv, scanPairs } from "./ohlcv.js";
-import { evaluateSetup, STRATEGY_NAME } from "./strategy.js";
+import { evaluateSetupResult, STRATEGY_NAME } from "./strategy.js";
 
 const DEFAULT_DEDUP_HOURS = 6;
 
@@ -31,7 +32,7 @@ async function main(): Promise<void> {
   const x = new StubXAdapter();
   const senders = { telegram, discord, x };
 
-  console.log(`Scanner: ${STRATEGY_NAME} (1h closed candles)`);
+  console.log(`Scanner: ${STRATEGY_NAME} (1h closed candles + quality gates)`);
   console.log(`Pairs: ${scanPairs().join(", ")} | dedup=${dedupHours}h`);
 
   const published: string[] = [];
@@ -47,20 +48,22 @@ async function main(): Promise<void> {
         `${pair}: ${ohlcv.candles.length} closed 1h bars from ${ohlcv.source}; last close=${last.close}`,
       );
 
-      const setup = evaluateSetup(pair, ohlcv.source, ohlcv.candles);
-      if (!setup) {
-        skipped.push(`${pair}: no cross on last closed candle`);
+      const result = evaluateSetupResult(pair, ohlcv.source, ohlcv.candles);
+      if (result.status === "skip") {
+        skipped.push(`${pair}: ${result.reason}`);
+        console.log(`SKIP ${pair}: ${result.reason}`);
         continue;
       }
 
+      const setup = result.setup;
       if (store.hasRecentOpenSignal(setup.pair, setup.side, dedupHours)) {
-        skipped.push(
-          `${pair}: dedup — open ${setup.side} already within ${dedupHours}h`,
-        );
+        const reason = `dedup — open ${setup.side} already within ${dedupHours}h`;
+        skipped.push(`${pair}: ${reason}`);
+        console.log(`SKIP ${pair}: ${reason}`);
         continue;
       }
 
-      const result = await publishSignal(
+      const pub = await publishSignal(
         store,
         {
           pair: setup.pair,
@@ -73,9 +76,9 @@ async function main(): Promise<void> {
         },
         senders,
       );
-      published.push(result.signal.id);
+      published.push(pub.signal.id);
       console.log(
-        `PUBLISHED ${result.signal.id} ${setup.side.toUpperCase()} ${setup.pair} @ ${setup.entry} (deliveries=${result.deliveries})`,
+        `PUBLISHED ${pub.signal.id} ${setup.side.toUpperCase()} ${setup.pair} @ ${setup.entry} conf=${setup.confidence} (deliveries=${pub.deliveries})`,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

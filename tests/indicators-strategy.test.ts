@@ -6,20 +6,47 @@ import {
   detectCrossOnLastClosed,
   ema,
 } from "../src/market/indicators.js";
-import { evaluateSetup } from "../src/market/strategy.js";
+import {
+  evaluateSetup,
+  evaluateSetupResult,
+  MIN_CONFIDENCE,
+  MIN_SEP_ATR,
+} from "../src/market/strategy.js";
 import type { Candle } from "../src/market/ohlcv.js";
 import { closedCandlesOnly } from "../src/market/ohlcv.js";
 
-/** Synthetic rising then falling closes for EMA/cross fixtures. */
-function closesToCandles(closes: number[], start = 1_700_000_000): Candle[] {
+/** Synthetic closes → candles; `rangePct` controls high/low vs close (ATR size). */
+function closesToCandles(
+  closes: number[],
+  start = 1_700_000_000,
+  rangePct = 0.01,
+): Candle[] {
   return closes.map((c, i) => ({
     time: start + i * 3600,
     open: c,
-    high: c * 1.01,
-    low: c * 0.99,
+    high: c * (1 + rangePct),
+    low: c * (1 - rangePct),
     close: c,
     volume: 100,
   }));
+}
+
+/** Strong last-bar long cross that clears ATR / separation / confidence gates. */
+function strongLongCloses(): number[] {
+  const base: number[] = [];
+  for (let i = 0; i < 50; i++) base.push(100 - i * 0.8);
+  for (let i = 0; i < 10; i++) base.push(base[base.length - 1]);
+  base[base.length - 1] = base[base.length - 1] + 80;
+  return base;
+}
+
+/** Strong last-bar short cross that clears quality gates. */
+function strongShortCloses(): number[] {
+  const base: number[] = [];
+  for (let i = 0; i < 50; i++) base.push(50 + i * 0.8);
+  for (let i = 0; i < 10; i++) base.push(base[base.length - 1]);
+  base[base.length - 1] = base[base.length - 1] - 80;
+  return base;
 }
 
 describe("ema", () => {
@@ -87,55 +114,39 @@ describe("confidenceFromSeparation", () => {
 
 describe("evaluateSetup", () => {
   it("emits long when EMA9 crosses above EMA21 on last closed candle", () => {
-    // Build a series that stays below then crosses up near the end.
-    const down = Array.from({ length: 40 }, (_, i) => 100 - i * 0.5);
-    const up = Array.from({ length: 15 }, (_, i) => down[down.length - 1] + (i + 1) * 2.5);
-    const candles = closesToCandles([...down, ...up]);
+    const candles = closesToCandles(strongLongCloses());
     const setup = evaluateSetup("BTCUSDT", "kraken", candles);
-    // May or may not cross depending on EMA lag — assert structure when present
-    if (setup) {
-      expect(setup.side).toBe("long");
-      expect(setup.stopLoss).toBeLessThan(setup.entry);
-      expect(setup.takeProfit[0]).toBeGreaterThan(setup.entry);
-      expect(setup.takeProfit[1]).toBeGreaterThan(setup.takeProfit[0]);
-      expect(setup.confidence).toBeGreaterThanOrEqual(50);
-      expect(setup.confidence).toBeLessThanOrEqual(75);
-      expect(setup.note).toMatch(/kraken/i);
-      expect(setup.note).toMatch(/not financial advice/i);
-    } else {
-      // Force a clear cross fixture via detectCross + evaluate path using crafted EMAs indirectly:
-      // Append one more strong up bar to force last-bar cross if missing.
-      const forced = closesToCandles([
-        ...Array.from({ length: 30 }, () => 100),
-        ...Array.from({ length: 10 }, (_, i) => 100 + i),
-        130,
-      ]);
-      const s2 = evaluateSetup("BTCUSDT", "kraken", forced);
-      // Flat then rise should produce a long at some point; if still null, check no crash
-      if (s2) {
-        expect(["long", "short"]).toContain(s2.side);
-      }
-      expect(true).toBe(true);
-    }
+    expect(setup).not.toBeNull();
+    expect(setup!.side).toBe("long");
+    expect(setup!.stopLoss).toBeLessThan(setup!.entry);
+    expect(setup!.takeProfit[0]).toBeGreaterThan(setup!.entry);
+    expect(setup!.takeProfit[1]).toBeGreaterThan(setup!.takeProfit[0]);
+    expect(setup!.confidence).toBeGreaterThanOrEqual(MIN_CONFIDENCE);
+    expect(setup!.confidence).toBeLessThanOrEqual(75);
+    expect(setup!.note).toMatch(/kraken/i);
+    expect(setup!.note).toMatch(/Quality gates/i);
+    expect(setup!.note).toMatch(/not financial advice/i);
   });
 
   it("returns null when there is no cross on the last closed candle", () => {
     const flat = Array.from({ length: 50 }, () => 100);
     const candles = closesToCandles(flat);
     expect(evaluateSetup("ETHUSDT", "coinbase", candles)).toBeNull();
+    const result = evaluateSetupResult("ETHUSDT", "coinbase", candles);
+    expect(result.status).toBe("skip");
+    if (result.status === "skip") {
+      expect(result.reason).toMatch(/no cross/i);
+    }
   });
 
   it("mirrors SL/TP for short", () => {
-    // Strong downtrend after uptrend to force a bearish cross on last bars
-    const up = Array.from({ length: 30 }, (_, i) => 100 + i);
-    const crash = Array.from({ length: 20 }, (_, i) => up[up.length - 1] - (i + 1) * 5);
-    const candles = closesToCandles([...up, ...crash]);
+    const candles = closesToCandles(strongShortCloses());
     const setup = evaluateSetup("ETHUSDT", "kraken", candles);
-    if (setup?.side === "short") {
-      expect(setup.stopLoss).toBeGreaterThan(setup.entry);
-      expect(setup.takeProfit[0]).toBeLessThan(setup.entry);
-      expect(setup.takeProfit[1]).toBeLessThan(setup.takeProfit[0]);
-    }
+    expect(setup).not.toBeNull();
+    expect(setup!.side).toBe("short");
+    expect(setup!.stopLoss).toBeGreaterThan(setup!.entry);
+    expect(setup!.takeProfit[0]).toBeLessThan(setup!.entry);
+    expect(setup!.takeProfit[1]).toBeLessThan(setup!.takeProfit[0]);
   });
 });
 
@@ -155,33 +166,76 @@ describe("closedCandlesOnly", () => {
 /** Deterministic cross: decline + hold (fast below slow), then one spike on last bar. */
 describe("evaluateSetup deterministic long cross", () => {
   it("publishes long levels from a known cross series", () => {
-    const base: number[] = [];
-    for (let i = 0; i < 50; i++) base.push(100 - i * 0.8);
-    for (let i = 0; i < 10; i++) base.push(base[base.length - 1]);
-    // Single last-bar spike large enough for EMA9 to cross above EMA21
-    base[base.length - 1] = base[base.length - 1] + 30;
-    const candles = closesToCandles(base);
+    const candles = closesToCandles(strongLongCloses());
     const setup = evaluateSetup("BTCUSDT", "kraken", candles);
     expect(setup).not.toBeNull();
     expect(setup!.side).toBe("long");
     expect(setup!.entry).toBe(candles[candles.length - 1].close);
     expect(setup!.stopLoss).toBeLessThan(setup!.entry);
     expect(setup!.takeProfit[1]).toBeGreaterThan(setup!.takeProfit[0]);
+    expect(setup!.confidence).toBeGreaterThanOrEqual(MIN_CONFIDENCE);
     expect(setup!.note).toContain("kraken");
+    expect(setup!.note).toMatch(/Quality gates/i);
     expect(setup!.note).toMatch(/not financial advice/i);
   });
 
   it("publishes short levels from a known bearish cross series", () => {
-    const base: number[] = [];
-    for (let i = 0; i < 50; i++) base.push(50 + i * 0.8);
-    for (let i = 0; i < 10; i++) base.push(base[base.length - 1]);
-    base[base.length - 1] = base[base.length - 1] - 30;
-    const candles = closesToCandles(base);
+    const candles = closesToCandles(strongShortCloses());
     const setup = evaluateSetup("ETHUSDT", "coinbase", candles);
     expect(setup).not.toBeNull();
     expect(setup!.side).toBe("short");
     expect(setup!.stopLoss).toBeGreaterThan(setup!.entry);
     expect(setup!.takeProfit[1]).toBeLessThan(setup!.takeProfit[0]);
+    expect(setup!.confidence).toBeGreaterThanOrEqual(MIN_CONFIDENCE);
     expect(setup!.note).toContain("coinbase");
+    expect(setup!.note).toMatch(/Quality gates/i);
+  });
+});
+
+describe("quality gates reject weak setups", () => {
+  it("SKIPs when ATR is ≤ 0.15% of price (dead market)", () => {
+    // Flat prices + tiny recovery cross; near-zero bar range → ATR << 0.15% price
+    const base: number[] = [];
+    for (let i = 0; i < 50; i++) base.push(100);
+    for (let i = 0; i < 5; i++) base.push(99.95);
+    base.push(100.2);
+    const candles = closesToCandles(base, 1_700_000_000, 0.000001);
+    const result = evaluateSetupResult("BTCUSDT", "kraken", candles);
+    expect(result.status).toBe("skip");
+    if (result.status === "skip") {
+      expect(result.reason).toMatch(/ATR too low/i);
+    }
+    expect(evaluateSetup("BTCUSDT", "kraken", candles)).toBeNull();
+  });
+
+  it("SKIPs hairline EMA separation (|EMA9−EMA21|/ATR < 0.15)", () => {
+    // Wide bars (large ATR) + tiny tip-over cross → sep << MIN_SEP_ATR
+    const base: number[] = [];
+    for (let i = 0; i < 40; i++) base.push(100);
+    for (let i = 0; i < 15; i++) base.push(100 - 0.05);
+    base.push(100 - 0.05 + 0.5);
+    const candles = closesToCandles(base, 1_700_000_000, 0.05);
+    const result = evaluateSetupResult("BTCUSDT", "kraken", candles);
+    expect(result.status).toBe("skip");
+    if (result.status === "skip") {
+      expect(result.reason).toMatch(/EMA separation too tight/i);
+      expect(result.reason).toContain(String(MIN_SEP_ATR));
+    }
+    expect(evaluateSetup("BTCUSDT", "kraken", candles)).toBeNull();
+  });
+
+  it("SKIPs when confidence after clamp is < 58", () => {
+    // Moderate spike: cross + ATR ok + sep ≈ 0.15 → confidence 54 < 58
+    const base: number[] = [];
+    for (let i = 0; i < 50; i++) base.push(100 - i * 0.8);
+    for (let i = 0; i < 10; i++) base.push(base[base.length - 1]);
+    base[base.length - 1] = base[base.length - 1] + 30;
+    const candles = closesToCandles(base);
+    const result = evaluateSetupResult("BTCUSDT", "kraken", candles);
+    expect(result.status).toBe("skip");
+    if (result.status === "skip") {
+      expect(result.reason).toMatch(new RegExp(`confidence \\d+ < ${MIN_CONFIDENCE}`));
+    }
+    expect(evaluateSetup("BTCUSDT", "kraken", candles)).toBeNull();
   });
 });
