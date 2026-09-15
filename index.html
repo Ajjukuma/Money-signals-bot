@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="QuickBill Free — create invoices, quotes, and receipts in your browser. No signup. Print to PDF. GST/VAT ready." />
+  <title>QuickBill Free — Invoice & Quote Generator</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/themes.css" id="theme-sheet" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">QB</span>
+      <div>
+        <strong>QuickBill Free</strong>
+        <span class="tag">Zero-cash · runs offline · your data stays local</span>
+      </div>
+    </div>
+    <nav class="actions">
+      <label class="sr-only" for="docType">Document type</label>
+      <select id="docType" title="Document type">
+        <option value="invoice">Invoice</option>
+        <option value="quote">Quote</option>
+        <option value="receipt">Receipt</option>
+      </select>
+      <select id="themeSelect" title="Template">
+        <option value="basic">Template: Basic (free)</option>
+        <option value="modern">Template: Modern (free)</option>
+        <option value="india-gst">Template: India GST (free)</option>
+        <option value="pro-locked" disabled>Pro: Midnight — unlock on Gumroad</option>
+        <option value="pro-locked2" disabled>Pro: Cream Letter — unlock on Gumroad</option>
+      </select>
+      <button type="button" id="btnSave" class="btn ghost">Save draft</button>
+      <button type="button" id="btnLoad" class="btn ghost">Load draft</button>
+      <button type="button" id="btnPrint" class="btn primary">Print / PDF</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="editor panel" aria-label="Invoice editor">
+      <h2>From</h2>
+      <div class="grid2">
+        <label>Business name<input id="fromName" placeholder="Your business" /></label>
+        <label>Email / phone<input id="fromContact" placeholder="you@email.com · +91…" /></label>
+        <label class="full">Address<textarea id="fromAddress" rows="2" placeholder="Street, city, PIN"></textarea></label>
+        <label>Tax ID / GSTIN<input id="fromTax" placeholder="Optional GSTIN / VAT / EIN" /></label>
+        <label>UPI / Pay ID<input id="payId" placeholder="name@upi or PayPal.me/…" /></label>
+      </div>
+
+      <h2>Bill to</h2>
+      <div class="grid2">
+        <label>Client name<input id="toName" placeholder="Client / company" /></label>
+        <label>Email / phone<input id="toContact" placeholder="client@email.com" /></label>
+        <label class="full">Address<textarea id="toAddress" rows="2" placeholder="Billing address"></textarea></label>
+      </div>
+
+      <h2>Details</h2>
+      <div class="grid3">
+        <label>Doc #<input id="docNumber" placeholder="INV-001" /></label>
+        <label>Date<input id="docDate" type="date" /></label>
+        <label>Due / valid<input id="docDue" type="date" /></label>
+        <label>Currency
+          <select id="currency">
+            <option value="INR">INR ₹</option>
+            <option value="USD">USD $</option>
+            <option value="EUR">EUR €</option>
+            <option value="GBP">GBP £</option>
+            <option value="AED">AED</option>
+          </select>
+        </label>
+        <label>Tax mode
+          <select id="taxMode">
+            <option value="none">No tax line</option>
+            <option value="gst">GST % (India)</option>
+            <option value="vat">VAT %</option>
+            <option value="sales">Sales tax %</option>
+          </select>
+        </label>
+        <label>Tax rate %<input id="taxRate" type="number" min="0" step="0.01" value="18" /></label>
+      </div>
+
+      <h2>Line items</h2>
+      <div class="table-wrap">
+        <table id="itemsTable">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>Qty</th>
+              <th>Rate</th>
+              <th>Amount</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+      </div>
+      <button type="button" id="btnAddItem" class="btn ghost">+ Add line</button>
+
+      <h2>Notes</h2>
+      <textarea id="notes" rows="3" placeholder="Payment terms, bank details, thank-you note…"></textarea>
+
+      <div class="pro-cta panel-inset">
+        <strong>Want Midnight & Cream Letter templates?</strong>
+        <p>Pro pack ($7) — extra print themes + sample pack. Replace the link below after you create a free Gumroad/Instamojo product.</p>
+        <a class="btn primary" id="proLink" href="https://gumroad.com" target="_blank" rel="noopener">Get Pro templates →</a>
+      </div>
+    </section>
+
+    <section class="preview-wrap" aria-label="Live preview">
+      <div class="preview-toolbar">
+        <span>Live preview</span>
+        <button type="button" id="btnDownloadHtml" class="btn ghost">Download HTML</button>
+      </div>
+      <div id="preview" class="preview theme-basic">
+        <!-- filled by JS -->
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>QuickBill Free · built for zero-cash launch · data never leaves your browser ·
+      <a href="README.md">README</a> ·
+      <a href="PUBLISH.md">Publish steps</a> ·
+      <a href="pro-pack/">Pro pack folder</a>
+    </p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
